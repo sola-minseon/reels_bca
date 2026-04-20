@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REEL/LENS — 인플루언서 광고 분석</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
+<script>
+// Firebase 초기화 - 스크립트 로드 완료 후 실행
+var db = null;
+
+function initFirebase() {
+  try {
+    var firebaseConfig = {
+      apiKey: "AIzaSyB6P2UK31Wlcw0HJE3gYo1ttu4T0b2nv44",
+      authDomain: "reellens-42b0f.firebaseapp.com",
+      projectId: "reellens-42b0f",
+      storageBucket: "reellens-42b0f.firebasestorage.app",
+      messagingSenderId: "125199361179",
+      appId: "1:125199361179:web:75be393ca49ad5353bd23e"
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    return true;
+  } catch(e) {
+    console.error('Firebase 초기화 실패:', e);
+    return false;
+  }
+}
+
+function fbSave(list) {
+  if (!db) { if (!initFirebase()) return Promise.resolve(); }
+  return db.collection('reellens').doc('records').set({ list: list })
+    .then(function(){ console.log('Firebase 저장 완료'); })
+    .catch(function(e){ console.error('Firebase 저장 실패:', e); });
+}
+
+function fbLoad() {
+  if (!db) { if (!initFirebase()) return Promise.resolve([]); }
+  return db.collection('reellens').doc('records').get()
+    .then(function(snap){
+      if (snap.exists) return snap.data().list || [];
+      return [];
+    });
+}
+
+window.addEventListener('load', function() {
+  initFirebase();
+  fbLoad().then(function(list) {
+    if (list && list.length > 0) {
+      records = list;
+      localStorage.setItem('reellens_v2', JSON.stringify(records));
+      updateCount(); updateBadges(); renderRaw(); populateInfDropdown();
+    } else if (records.length > 0) {
+      fbSave(records);
+    }
+    var dot = document.getElementById('fb-dot');
+    var label = document.getElementById('fb-label');
+    if (dot) dot.style.background = '#3dd68c';
+    if (label) label.textContent = 'Firebase 연결됨';
+  }).catch(function(e) {
+    console.error('Firebase 로드 실패:', e);
+    var dot = document.getElementById('fb-dot');
+    var label = document.getElementById('fb-label');
+    if (dot) dot.style.background = '#f5a623';
+    if (label) label.textContent = '오프라인(로컬)';
+  });
+});
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f11;--surface:#18181c;--surface2:#202026;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8e8ec;--text2:#8888a0;--text3:#55556a;
+  --accent:#7c6cfa;--accent2:#a896ff;
+  --green:#3dd68c;--amber:#f5a623;--red:#f56565;--teal:#38d9c0;
+  --font:'Pretendard',sans-serif;--mono:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;line-height:1.6}
+.app{display:flex;flex-direction:column;height:100vh}
+.header{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0}
+.logo{font-size:13px;font-weight:600;letter-spacing:0.08em;color:var(--accent2);font-family:var(--mono)}
+.logo span{color:var(--text3)}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.count-pill{font-size:11px;font-family:var(--mono);background:rgba(124,108,250,0.12);color:var(--accent2);border:1px solid rgba(124,108,250,0.25);padding:3px 10px;border-radius:99px}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;padding:0 24px}
+.tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:var(--font)}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+.content{flex:1;overflow-y:auto;padding:24px}
+.pane{display:none}.pane.active{display:block}
+.section{margin-bottom:24px}
+.section-title{font-size:11px;font-weight:600;letter-spacing:0.1em;color:var(--text3);text-transform:uppercase;margin-bottom:12px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+label{font-size:12px;color:var(--text2);font-weight:500}
+input[type=text],input[type=number],select,textarea{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color 0.2s;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select option{background:var(--surface2)}
+textarea{resize:vertical;min-height:70px}
+.chip-group{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 12px;border-radius:99px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text2);transition:all 0.15s;user-select:none;font-family:var(--font)}
+.chip:hover{border-color:var(--accent);color:var(--accent2)}
+.chip.selected{background:rgba(124,108,250,0.15);border-color:var(--accent);color:var(--accent2)}
+.metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);transition:all 0.2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{color:var(--text)}
+.btn-row{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+.ai-box{background:var(--surface);border:1px solid rgba(124,108,250,0.3);border-radius:12px;padding:18px;margin-top:16px}
+.ai-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.ai-label{font-size:11px;font-weight:600;letter-spacing:0.1em;color:var(--accent2);text-transform:uppercase}
+.grade-badge{font-size:18px;font-weight:700;font-family:var(--mono);padding:4px 14px;border-radius:8px;margin-left:auto}
+.grade-S{background:rgba(61,214,140,0.15);color:var(--green)}
+.grade-A{background:rgba(124,108,250,0.15);color:var(--accent2)}
+.grade-B{background:rgba(245,166,35,0.15);color:var(--amber)}
+.grade-C{background:rgba(245,101,101,0.15);color:var(--red)}
+.grade-F{background:rgba(245,101,101,0.08);color:#cc4444}
+.grade-F-{background:rgba(100,100,100,0.15);color:var(--text3)}
+.grade-기준미달{background:rgba(100,100,100,0.1);color:var(--text3)}
+.insight-list{display:flex;flex-direction:column;gap:8px}
+.insight-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--text2);line-height:1.5}
+.insight-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:6px;flex-shrink:0}
+.loading-box{display:flex;align-items:center;gap:10px;color:var(--text3);font-size:13px;padding:12px 0}
+.spinner{width:16px;height:16px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--accent);animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.copy-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7;margin-top:12px}
+.db-controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.db-controls select{width:auto}
+.db-table{width:100%;border-collapse:collapse}
+.db-table th{text-align:left;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);padding:8px 12px;border-bottom:1px solid var(--border)}
+.db-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2)}
+.db-table tr:hover td{background:var(--surface)}
+.grade-tag{font-size:11px;font-weight:700;font-family:var(--mono);padding:2px 8px;border-radius:4px}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3);font-size:13px}
+.pattern-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pattern-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px}
+.pattern-card-title{font-size:12px;font-weight:600;color:var(--text3);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.08em}
+.bar-item{margin-bottom:10px}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px}
+.bar-track{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;background:var(--accent);transition:width 0.6s ease}
+.bar-fill.green{background:var(--green)}
+.bar-fill.amber{background:var(--amber)}
+.pattern-summary{grid-column:1/-1;background:linear-gradient(135deg,rgba(124,108,250,0.08),rgba(56,217,192,0.05));border:1px solid rgba(124,108,250,0.2);border-radius:12px;padding:20px}
+.summary-title{font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:12px}
+.summary-text{font-size:13px;color:var(--text2);line-height:1.8}
+.no-data-msg{color:var(--text3);font-size:13px;text-align:center;padding:30px}
+.ai-rec-box{
+  display:none;margin-bottom:8px;padding:6px 12px;
+  background:rgba(124,108,250,0.08);border:1px solid rgba(124,108,250,0.2);
+  border-radius:6px;font-size:12px;color:var(--accent2);
+  display:flex;align-items:center;gap:8px;
+}
+.ai-rec-box .ai-rec-label{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(124,108,250,0.2);color:var(--accent2);letter-spacing:0.06em;flex-shrink:0}
+.ai-rec-box .ai-rec-val{font-weight:500}
+.ai-rec-box .ai-rec-reason{color:var(--text3);font-size:11px;margin-left:4px}
+.chip-wrap{position:relative;display:inline-block}
+.chip-wrap .tooltip{
+  display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:var(--surface2);border:1px solid var(--border2);border-radius:8px;
+  padding:8px 12px;font-size:11px;color:var(--text2);white-space:nowrap;z-index:100;
+  line-height:1.6;min-width:180px;max-width:260px;white-space:normal;text-align:left;
+  box-shadow:0 4px 16px rgba(0,0,0,0.3);
+}
+.chip-wrap:hover .tooltip{display:block}
+.tooltip-arrow{position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);
+  width:8px;height:8px;background:var(--surface2);border-right:1px solid var(--border2);
+  border-bottom:1px solid var(--border2);transform:translateX(-50%) rotate(45deg);
+}
+.import-zone{border:2px dashed var(--border2);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface)}
+.import-zone:hover,.import-zone.dragover{border-color:var(--accent);background:rgba(124,108,250,0.05)}
+.import-result{margin-top:14px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:13px}
+.mapping-table{width:100%;border-collapse:collapse;margin-top:12px}
+.mapping-table th{font-size:11px;color:var(--text3);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;letter-spacing:0.08em;text-transform:uppercase}
+.mapping-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)}
+.mapping-table select{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;color:var(--text);font-size:12px;font-family:var(--font);outline:none}
+.tag-auto{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(61,214,140,0.15);color:var(--green);font-weight:600;margin-left:6px}
+.tag-manual{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(245,166,35,0.15);color:var(--amber);font-weight:600;margin-left:6px}
+.progress-bar{height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width 0.3s}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <div class="logo">REEL<span>/</span>LENS</div>
+  <div class="header-right">
+    <button onclick="cleanupData()" class="btn btn-ghost" style="font-size:11px;padding:5px 10px;color:var(--text3)" title="중복·깨진 데이터 정리">데이터 정리</button>
+    <div id="api-key-area" style="display:flex;align-items:center;gap:8px">
+      <input type="password" id="apiKeyInput" placeholder="Anthropic API Key (sk-ant-...)" style="width:260px;font-size:12px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);outline:none;font-family:var(--mono)">
+      <button onclick="saveApiKey()" class="btn btn-ghost" style="font-size:12px;padding:6px 12px">저장</button>
+      <span id="api-key-status" style="font-size:11px;color:var(--text3)"></span>
+    </div>
+    <div id="fb-status" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)">
+      <div id="fb-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text3)"></div>
+      <span id="fb-label">연결 중...</span>
+    </div>
+    <div class="count-pill" id="countPill">분석 0건</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('import')">데이터 가져오기</button>
+  <button class="tab" onclick="switchTab('analyze')">새 영상 분석</button>
+  <button class="tab" onclick="switchTab('raw')">Raw DB <span id="raw-count-badge" style="font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(245,166,35,0.2);color:var(--amber);margin-left:4px">0</span></button>
+  <button class="tab" onclick="switchTab('done')">분석완료 DB <span id="done-count-badge" style="font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(61,214,140,0.2);color:var(--green);margin-left:4px">0</span></button>
+  <button class="tab" onclick="switchTab('pattern')">패턴 인사이트</button>
+</div>
+
+<div class="content">
+
+<!-- TAB 0: CSV Import -->
+<div class="pane active" id="pane-import">
+  <div class="section">
+    <div class="section-title">구글 시트 데이터 가져오기</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.7">
+      구글 시트에서 <strong style="color:var(--text)">파일 → 다운로드 → CSV</strong>로 저장한 뒤 아래에 올려주세요.<br>
+      <span style="color:var(--text3)">컬럼 자동 매핑 후 확인하면 바로 DB에 적재돼요.</span>
+    </div>
+    <div class="import-zone" id="dropZone" onclick="document.getElementById('csvFile').click()">
+      <div style="font-size:28px;margin-bottom:10px;opacity:0.4">↑</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">CSV 파일을 여기에 드래그하거나 클릭해서 선택</div>
+      <div style="font-size:12px;color:var(--text3)">구글 시트 → 파일 → 다운로드 → CSV (.csv)</div>
+      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+    <div id="importResult" style="display:none">
+      <div class="import-result">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:500;color:var(--text)" id="fileInfo"></div>
+          <div style="font-size:12px;color:var(--text3)" id="rowCount"></div>
+        </div>
+        <div class="section-title" style="margin-bottom:8px">컬럼 자동 매핑 확인</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
+          <span class="tag-auto">자동</span> 자동 감지됨 &nbsp;
+          <span class="tag-manual">확인필요</span> 직접 선택 필요
+        </div>
+        <table class="mapping-table" id="mappingTable">
+          <thead><tr><th>앱 필드</th><th>시트 컬럼</th><th>미리보기</th></tr></thead>
+          <tbody id="mappingBody"></tbody>
+        </table>
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn btn-primary" id="importBtn" onclick="doImport()">가져오기 실행</button>
+          <button class="btn btn-ghost" onclick="resetImport()">취소</button>
+        </div>
+        <div id="importProgress" style="display:none">
+          <div style="font-size:12px;color:var(--text3);margin-top:12px" id="importMsg">처리 중...</div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="section" style="margin-top:32px">
+    <div class="section-title">컬럼 매핑 안내</div>
+    <table class="mapping-table">
+      <thead><tr><th>앱 필드</th><th>시트 컬럼명</th><th>계산 방식</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text)">인플루언서명</td><td>인플루언서명</td><td style="color:var(--text3)">직접 매핑</td></tr>
+        <tr><td style="color:var(--text)">제품</td><td>제품</td><td style="color:var(--text3)">직접 매핑</td></tr>
+        <tr><td style="color:var(--text)">월</td><td>구분월</td><td style="color:var(--text3)">직접 매핑</td></tr>
+        <tr><td style="color:var(--text)">CTR (%)</td><td>링크 클릭 / 노출 × 100</td><td style="color:var(--green)">자동 계산</td></tr>
+        <tr><td style="color:var(--text)">CVR (%)</td><td>웹사이트 구매 / 링크 클릭 × 100</td><td style="color:var(--green)">자동 계산</td></tr>
+        <tr><td style="color:var(--text)">구매 건수</td><td>웹사이트 구매</td><td style="color:var(--text3)">직접 매핑</td></tr>
+        <tr><td style="color:var(--text)">매출 (만원)</td><td>웹사이트 구매 전환값 / 10000</td><td style="color:var(--green)">자동 계산</td></tr>
+        <tr><td style="color:var(--text)">지출 (만원)</td><td>지출 금액 (KRW) / 10000</td><td style="color:var(--green)">자동 계산</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.7">
+      * CTR·CVR은 시트에 없어도 노출·클릭·구매 수치가 있으면 자동으로 계산돼요.<br>
+      * 훅 유형·내러티브 구조 등 질적 항목은 가져오기 후 개별 영상에서 직접 채워야 해요.
+    </div>
+  </div>
+</div>
+
+<!-- TAB 1: 분석 -->
+<div class="pane" id="pane-analyze">
+  <div class="section">
+    <div class="section-title">인플루언서 선택</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">DB에 저장된 인플루언서+제품을 선택하면 성과 지표가 자동으로 불러와져요.</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>인플루언서명 <span style="color:var(--red)">*</span></label>
+        <select id="inf-name" onchange="onInfChange()">
+          <option value="">— 선택 —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>제품 <span style="color:var(--red)">*</span></label>
+        <select id="inf-product" onchange="onProductChange()">
+          <option value="">— 인플루언서 먼저 선택 —</option>
+        </select>
+      </div>
+      <div class="form-group"><label>영상 링크</label><input type="text" id="inf-link" placeholder="https://..."></div>
+      <div class="form-group"><label>팔로워 규모</label>
+        <select id="inf-size"><option value="">선택</option><option>나노 (~1만)</option><option>마이크로 (1~10만)</option><option>미드 (10~50만)</option><option>매크로 (50만+)</option></select>
+      </div>
+      <div class="form-group"><label>카테고리</label>
+        <select id="inf-cat"><option value="">선택</option><option>뷰티/스킨케어</option><option>패션/라이프스타일</option><option>식품/음료</option><option>육아</option><option>앱/서비스</option><option>기타</option></select>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">성과 지표
+      <span id="metrics-auto-badge" style="display:none;font-size:10px;padding:2px 8px;border-radius:99px;background:rgba(61,214,140,0.15);color:var(--green);font-weight:600;margin-left:8px;letter-spacing:0.04em">자동 불러옴</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px" id="metrics-hint">인플루언서+제품 선택 시 자동으로 채워져요.</div>
+    <div class="metric-row">
+      <div class="form-group">
+        <label>CTR (%)</label>
+        <input type="number" id="m-ctr" placeholder="자동" step="0.01" readonly style="color:var(--accent2)">
+      </div>
+      <div class="form-group">
+        <label>CVR (%)</label>
+        <input type="number" id="m-cvr" placeholder="자동" step="0.01" readonly style="color:var(--accent2)">
+      </div>
+      <div class="form-group">
+        <label>구매 건수</label>
+        <input type="number" id="m-orders" placeholder="자동" readonly style="color:var(--accent2)">
+      </div>
+      <div class="form-group">
+        <label>매출 (만원)</label>
+        <input type="number" id="m-revenue" placeholder="자동" readonly style="color:var(--accent2)">
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <span id="roas-display" style="font-size:12px;color:var(--text3)"></span>
+      <span id="grade-display" style="font-size:12px;margin-left:12px"></span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">훅 유형 (첫 1~3초)</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">직접 선택하거나, 아래에 훅 문구를 입력하면 AI가 자동으로 분류해줘요.</div>
+
+    <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">
+      주요 유형 <span style="color:var(--red)">*</span>
+      <span style="font-weight:400;color:var(--text3);margin-left:6px">패턴 분석 기준이 돼요</span>
+    </div>
+    <div class="ai-rec-box" id="ai-rec-hook" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-hook-val"></span>
+      <span class="ai-rec-reason" id="ai-rec-hook-reason"></span>
+    </div>
+    <div class="chip-group" id="chips-hook">
+      <div class="chip-wrap">
+        <div class="chip" data-val="질문형">질문형</div>
+        <div class="tooltip">시청자에게 직접 질문을 던져 시선 고정<br><span style="color:var(--text3)">예: "욕실화 아직도 이거 쓰세요?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="충격정보형">충격정보형</div>
+        <div class="tooltip">반전이나 놀라운 사실로 시작해 호기심 유발<br><span style="color:var(--text3)">예: "욕실 낙상 사고 연 2만 건인 거 알아?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="공감형">공감형</div>
+        <div class="tooltip">시청자의 고민·상황을 직접 대변해서 공감 유도<br><span style="color:var(--text3)">예: "욕실 바닥 미끄러워서 항상 불안하죠?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="비주얼임팩트">비주얼임팩트</div>
+        <div class="tooltip">말 없이 강렬한 시각으로 시선을 잡는 방식<br><span style="color:var(--text3)">예: 미끄러지는 장면, 극적인 Before 컷</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="정보나열형">정보나열형</div>
+        <div class="tooltip">리스트나 숫자로 시작해 정보성 콘텐츠처럼 진입<br><span style="color:var(--text3)">예: "욕실화 고를 때 꼭 봐야 할 3가지"</span><div class="tooltip-arrow"></div></div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:500;color:var(--text2);margin:14px 0 8px">
+      보조 유형 <span style="font-weight:400;color:var(--text3);margin-left:6px">복합 훅일 때 기록용 (선택)</span>
+    </div>
+    <div class="ai-rec-box" id="ai-rec-hook-sub" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-hook-sub-val"></span>
+    </div>
+    <div class="chip-group" id="chips-hook-sub">
+      <div class="chip-wrap">
+        <div class="chip" data-val="질문형">질문형</div>
+        <div class="tooltip">시청자에게 직접 질문을 던져 시선 고정<br><span style="color:var(--text3)">예: "욕실화 아직도 이거 쓰세요?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="충격정보형">충격정보형</div>
+        <div class="tooltip">반전이나 놀라운 사실로 시작해 호기심 유발<br><span style="color:var(--text3)">예: "욕실 낙상 사고 연 2만 건인 거 알아?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="공감형">공감형</div>
+        <div class="tooltip">시청자의 고민·상황을 직접 대변해서 공감 유도<br><span style="color:var(--text3)">예: "욕실 바닥 미끄러워서 항상 불안하죠?"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="비주얼임팩트">비주얼임팩트</div>
+        <div class="tooltip">말 없이 강렬한 시각으로 시선을 잡는 방식<br><span style="color:var(--text3)">예: 미끄러지는 장면, 극적인 Before 컷</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="정보나열형">정보나열형</div>
+        <div class="tooltip">리스트나 숫자로 시작해 정보성 콘텐츠처럼 진입<br><span style="color:var(--text3)">예: "욕실화 고를 때 꼭 봐야 할 3가지"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="없음">없음</div>
+        <div class="tooltip">보조 훅 없이 단일 유형으로만 구성<div class="tooltip-arrow"></div></div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:flex-start">
+      <input type="text" id="hook-text-input" placeholder="예: 다른 사람들은 다 이것만 쓴다면서요?" style="flex:1;font-size:13px">
+      <button class="btn btn-ghost" onclick="classifyHook()" id="hookClassifyBtn" style="white-space:nowrap;font-size:12px;padding:9px 14px">AI 분류</button>
+    </div>
+    <div id="hook-classify-result" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
+  </div>
+  <div class="section">
+    <div class="section-title">내러티브 구조</div>
+    <div class="ai-rec-box" id="ai-rec-narrative" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-narrative-val"></span>
+      <span class="ai-rec-reason" id="ai-rec-narrative-reason"></span>
+    </div>
+    <div class="chip-group" id="chips-narrative">
+      <div class="chip-wrap">
+        <div class="chip" data-val="문제→해결형">문제→해결형</div>
+        <div class="tooltip">불편함/위험 상황 제시 후 제품으로 해결하는 흐름<br><span style="color:var(--text3)">예: "욕실 바닥 미끄러워서 넘어질 뻔했는데..."</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="Before-After">Before-After</div>
+        <div class="tooltip">사용 전후 변화를 직접 비교해서 보여주는 구조<br><span style="color:var(--text3)">예: 지저분한 욕실 → 제품 후 깔끔한 욕실</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="일상/집꾸미기형">일상/집꾸미기형</div>
+        <div class="tooltip">집 인테리어·욕실 정리 브이로그 속 자연스러운 노출<br><span style="color:var(--text3)">예: "욕실 청소 루틴이에요~" 하며 제품 등장</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="언박싱/첫인상형">언박싱/첫인상형</div>
+        <div class="tooltip">택배 개봉 후 소재·디자인·퀄리티 첫인상 전달<br><span style="color:var(--text3)">예: "드디어 왔다! 퀄리티 실화냐"</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="기능시연형">기능시연형</div>
+        <div class="tooltip">제품 핵심 기능을 직접 눈으로 보여주는 방식<br><span style="color:var(--text3)">예: 미끄럼 방지 테스트, 물 빠짐·세탁 시연</span><div class="tooltip-arrow"></div></div>
+      </div>
+      <div class="chip-wrap">
+        <div class="chip" data-val="비교형">비교형</div>
+        <div class="tooltip">타사 제품 또는 기존 제품과 직접 비교<br><span style="color:var(--text3)">예: "기존 욕실화랑 비교해봤어요"</span><div class="tooltip-arrow"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">소구 포인트</div>
+    <div class="ai-rec-box" id="ai-rec-message" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-message-val"></span>
+      <span class="ai-rec-reason" id="ai-rec-message-reason"></span>
+    </div>
+    <div class="chip-group" id="chips-message">
+      <div class="chip" data-val="기능/성분">기능/성분</div>
+      <div class="chip" data-val="감성/라이프스타일">감성/라이프스타일</div>
+      <div class="chip" data-val="가격/가성비">가격/가성비</div>
+      <div class="chip" data-val="사회적증거">사회적증거</div>
+      <div class="chip" data-val="희소성/긴급성">희소성/긴급성</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">광고 노출 방식</div>
+    <div class="ai-rec-box" id="ai-rec-style" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-style-val"></span>
+    </div>
+    <div class="chip-group" id="chips-style">
+      <div class="chip" data-val="자연녹아들기">자연녹아들기</div>
+      <div class="chip" data-val="광고선언형">광고선언형</div>
+      <div class="chip" data-val="전문가추천형">전문가추천형</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">CTA 방식</div>
+    <div class="ai-rec-box" id="ai-rec-cta" style="display:none">
+      <span class="ai-rec-label">AI 추천</span>
+      <span class="ai-rec-val" id="ai-rec-cta-val"></span>
+    </div>
+    <div class="chip-group" id="chips-cta">
+      <div class="chip" data-val="링크클릭유도">링크클릭유도</div>
+      <div class="chip" data-val="댓글유도">댓글유도</div>
+      <div class="chip" data-val="저장유도">저장유도</div>
+      <div class="chip" data-val="CTA없음">CTA없음</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">내레이션</div>
+    <div class="chip-group" id="chips-narration">
+      <div class="chip" data-val="자막만">자막만</div>
+      <div class="chip" data-val="내레이션+자막">내레이션+자막</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">스크립트 자동 분석
+      <span style="font-size:10px;padding:2px 8px;border-radius:99px;background:rgba(124,108,250,0.15);color:var(--accent2);font-weight:600;margin-left:8px">AI</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">영상 자막·스크립트를 붙여넣으면 AI가 훅·구조·소구·내레이션·CTA를 한 번에 추천해줘요.</div>
+    <textarea id="script-input" placeholder="예: 안 세워놔도 스스로 마른다고? 물 때 걱정 제로!&#10;매번 세워놓기도 어렵고(귀찮고..ㅋㅋ)&#10;물 때 끼는거 진짜 싫은데 이건 막 벗어놔도 알아서 말라요!&#10;..." style="min-height:120px"></textarea>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn btn-ghost" onclick="analyzeScript()" id="scriptAnalyzeBtn" style="font-size:12px;padding:9px 16px">
+        스크립트 분석하기
+      </button>
+      <span id="script-analyze-status" style="font-size:12px;color:var(--text3);align-self:center"></span>
+    </div>
+    <div id="script-result" style="display:none;margin-top:12px;padding:14px;background:var(--surface);border:1px solid rgba(124,108,250,0.25);border-radius:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--accent2);letter-spacing:0.08em;margin-bottom:10px">AI 추천 결과 — 클릭하면 자동 선택돼요</div>
+      <div id="script-result-content"></div>
+      <button class="btn btn-primary" onclick="applyScriptResult()" style="margin-top:12px;font-size:12px;padding:8px 16px">항목 자동 적용</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">콘텐츠 정보</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>콘텐츠 업로드 일자</label>
+        <input type="date" id="inf-uploaddate">
+      </div>
+      <div class="form-group">
+        <label>조회수</label>
+        <input type="number" id="m-views" placeholder="예: 15000">
+      </div>
+      <div class="form-group">
+        <label>좋아요 수</label>
+        <input type="number" id="m-likes" placeholder="예: 320">
+      </div>
+      <div class="form-group">
+        <label>댓글 수</label>
+        <input type="number" id="m-comments" placeholder="예: 82">
+      </div>
+      <div class="form-group">
+        <label>분석 입력일</label>
+        <input type="text" id="inf-analyzeddate" placeholder="저장 시 자동 기록" readonly style="color:var(--text3);cursor:not-allowed">
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="form-group full"><label>메모 (자유 관찰)</label><textarea id="memo" placeholder="특이사항, 댓글 반응, 분위기 등 자유롭게 기록"></textarea></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="analyzeBtn" onclick="runAnalysis()">AI 분석 실행</button>
+    <button class="btn btn-ghost" onclick="resetForm()">초기화</button>
+  </div>
+  <div id="ai-result"></div>
+</div>
+
+<!-- TAB 2: Raw DB -->
+<div class="pane" id="pane-raw">
+  <div style="font-size:12px;color:var(--text3);margin-bottom:14px">성과 데이터만 있고 아직 영상 분석이 완료되지 않은 인플루언서 목록이에요.</div>
+  <div class="db-controls">
+    <select id="raw-filter-grade" onchange="renderRaw()">
+      <option value="">전체 등급</option><option>S</option><option>A</option><option>B</option><option>C</option><option>F</option><option value="F-">F-</option><option value="기준미달">기준미달</option><option value="미분류">미분류</option>
+    </select>
+    <input type="text" id="raw-filter-search" placeholder="인플루언서 검색..." style="width:160px" oninput="renderRaw()">
+    <button class="btn btn-ghost" onclick="exportNotion()" style="margin-left:auto;font-size:12px">노션 내보내기</button>
+    <button class="btn btn-ghost" onclick="clearCSV()" style="font-size:12px;color:var(--amber)">CSV 데이터 삭제</button>
+    <button class="btn btn-ghost" onclick="clearAll()" style="font-size:12px;color:var(--red)">전체 삭제</button>
+  </div>
+  <table class="db-table">
+    <thead><tr><th>인플루언서</th><th>제품</th><th>기간(월)</th><th>등급</th><th>ROAS</th><th>CTR</th><th>CVR</th><th>구매</th><th>매출(만)</th><th>지출(만)</th><th>분석하기</th></tr></thead>
+    <tbody id="rawBody"></tbody>
+  </table>
+  <div id="rawEmpty" class="empty-state" style="display:none">미분석 데이터가 없어요. 모든 인플루언서의 영상 분석이 완료됐어요! 🎉</div>
+</div>
+
+<!-- TAB 3: 분석완료 DB -->
+<div class="pane" id="pane-done">
+  <div style="font-size:12px;color:var(--text3);margin-bottom:14px">영상 분석까지 완료된 인플루언서 목록이에요. 행을 클릭하면 상세 분석 결과를 볼 수 있어요.</div>
+  <div class="db-controls">
+    <select id="done-filter-grade" onchange="renderDone()">
+      <option value="">전체 등급</option><option>S</option><option>A</option><option>B</option><option>C</option><option>F</option><option value="F-">F-</option><option value="기준미달">기준미달</option>
+    </select>
+    <select id="done-filter-hook" onchange="renderDone()">
+      <option value="">전체 훅</option><option>질문형</option><option>충격정보형</option><option>공감형</option><option>비주얼임팩트</option><option>정보나열형</option>
+    </select>
+    <input type="text" id="done-filter-search" placeholder="인플루언서 검색..." style="width:160px" oninput="renderDone()">
+    <button class="btn btn-ghost" onclick="exportNotion()" style="margin-left:auto;font-size:12px">노션 내보내기</button>
+  </div>
+  <table class="db-table">
+    <thead><tr><th>인플루언서</th><th>제품</th><th>기간(월)</th><th>등급</th><th>ROAS</th><th>CTR</th><th>CVR</th><th>구매</th><th>매출(만)</th><th>훅</th><th>구조</th><th>내레이션</th></tr></thead>
+    <tbody id="doneBody"></tbody>
+  </table>
+  <div id="doneEmpty" class="empty-state" style="display:none">아직 분석 완료된 영상이 없어요. Raw DB에서 분석하기 버튼을 눌러 시작해보세요.</div>
+</div>
+
+<!-- 사이드 패널 -->
+<div id="side-panel" style="display:none;position:fixed;top:0;right:0;width:420px;height:100vh;background:var(--surface);border-left:1px solid var(--border2);z-index:200;overflow-y:auto;box-shadow:-4px 0 24px rgba(0,0,0,0.3)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:10">
+    <div style="font-size:14px;font-weight:500;color:var(--text)" id="panel-title">분석 상세</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="editFromPanel()" style="font-size:12px;padding:6px 12px">수정하기</button>
+      <button class="btn btn-ghost" onclick="deleteFromPanel()" style="font-size:12px;padding:6px 12px;color:var(--red)">삭제</button>
+      <button onclick="closePanel()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px 8px">✕</button>
+    </div>
+  </div>
+  <div id="panel-content" style="padding:20px"></div>
+</div>
+<div id="panel-overlay" onclick="closePanel()" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);z-index:199"></div>
+
+<!-- TAB 3: 패턴 -->
+<div class="pane" id="pane-pattern">
+  <div id="patternContent"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+let records = JSON.parse(localStorage.getItem('reellens_v2') || '[]');
+let csvData = [], csvHeaders = [];
+
+function save() {
+  localStorage.setItem('reellens_v2', JSON.stringify(records));
+  updateCount();
+  updateBadges();
+  fbSave(records);
+}
+
+function excelSerialToYearMonth(serial) {
+  // 엑셀 시리얼 넘버 → Date 변환 (1900년 기준, 윤년 버그 보정)
+  serial = parseInt(serial) || 0;
+  if (serial <= 0) return null;
+  var d = new Date((serial - 25569) * 86400 * 1000);
+  if (isNaN(d.getTime())) return null;
+  var year = d.getUTCFullYear();
+  var month = d.getUTCMonth() + 1;
+  return { year: year, month: month, key: year + '-' + String(month).padStart(2,'0') };
+}
+function yearMonthLabel(key) {
+  // "2025-09" → "25년 9월"
+  var parts = key.split('-');
+  if (parts.length < 2) return key;
+  return String(parts[0]).slice(2) + '년 ' + parseInt(parts[1]) + '월';
+}
+
+function fmtNum(n) {
+  if (!n && n !== 0) return '-';
+  return Number(n).toLocaleString('ko-KR');
+}
+function fmtViews(n) {
+  n = Number(n) || 0;
+  if (n === 0) return '-';
+  if (n >= 100000000) return fmtNum((n/100000000).toFixed(1).replace(/\.0$/,'')) + '억';
+  if (n >= 10000) return fmtNum(Math.round(n/10000)) + '만';
+  if (n >= 1000) return fmtNum(Math.round(n/1000)) + '천';
+  return fmtNum(n);
+}
+function fmtWon(n) {
+  n = Number(n) || 0;
+  if (n === 0) return '-';
+  if (n >= 10000) return fmtNum((n/10000).toFixed(1).replace(/\.0$/,'')) + '억원';
+  if (n >= 1) return fmtNum(Math.round(n)) + '만원';
+  // 1만원 미만 (소수점 단위)
+  var won = Math.round(n * 10000);
+  if (won >= 1000) return fmtNum(Math.round(won/1000)) + '천원';
+  return fmtNum(won) + '원';
+}
+function fmtRevChart(n) {
+  n = Number(n) || 0;
+  if (n >= 10000) return Math.round(n/10000) + '억';
+  return fmtNum(Math.round(n)) + '만';
+}
+function updateCount() { document.getElementById('countPill').textContent = '분석 ' + records.length + '건'; }
+function isAnalyzed(r) { return !!(r.hook || r.narrative || r.analyzedDate); }
+function updateBadges() {
+  var raw = records.filter(function(r){ return !isAnalyzed(r); });
+  var done = records.filter(function(r){ return isAnalyzed(r); });
+  var rb = document.getElementById('raw-count-badge');
+  var db = document.getElementById('done-count-badge');
+  if (rb) rb.textContent = raw.length;
+  if (db) db.textContent = done.length;
+}
+
+function saveApiKey() {
+  var key = document.getElementById('apiKeyInput').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('올바른 API 키를 입력해주세요. (sk-ant-로 시작)'); return; }
+  localStorage.setItem('rl_api_key', key);
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('api-key-status').innerHTML = '<span style="color:var(--green)">✓ 저장됨</span>';
+}
+
+function getApiKey() {
+  return localStorage.getItem('rl_api_key') || '';
+}
+
+function apiFetch(prompt, maxTokens) {
+  var key = getApiKey();
+  if (!key) { alert('API 키를 먼저 입력해주세요. (우측 상단)'); return Promise.reject('no key'); }
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens || 1000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+}
+
+// 페이지 로드 시 API 키 상태 표시
+(function() {
+  var saved = localStorage.getItem('rl_api_key');
+  if (saved) {
+    document.addEventListener('DOMContentLoaded', function() {
+      var el = document.getElementById('api-key-status');
+      if (el) el.innerHTML = '<span style="color:var(--green)">✓ 저장됨</span>';
+    });
+  }
+})();
+
+function switchTab(name) {
+  var names = ['import','analyze','raw','done','pattern'];
+  document.querySelectorAll('.tab').forEach(function(t,i){ t.classList.toggle('active', names[i] === name); });
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'analyze') populateInfDropdown();
+  if (name === 'raw') renderRaw();
+  if (name === 'done') renderDone();
+  if (name === 'pattern') renderPattern();
+}
+
+var dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', function(){ dz.classList.remove('dragover'); });
+dz.addEventListener('drop', function(e){ e.preventDefault(); dz.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.csv')) { alert('CSV 파일만 지원해요.'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e){ parseCSV(e.target.result, file.name); };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text, filename) {
+  var lines = text.split('\n').filter(function(l){ return l.trim(); });
+  if (lines.length < 2) { alert('데이터가 없어요.'); return; }
+  csvHeaders = parseCSVLine(lines[0]);
+  csvData = lines.slice(1).map(function(l){
+    var vals = parseCSVLine(l);
+    var row = {};
+    csvHeaders.forEach(function(h,i){ row[h] = (vals[i] || '').trim(); });
+    return row;
+  }).filter(function(r){ return Object.values(r).some(function(v){ return v; }); });
+  document.getElementById('fileInfo').textContent = filename;
+  document.getElementById('rowCount').textContent = csvData.length + '행 감지';
+  document.getElementById('importResult').style.display = 'block';
+  renderMapping();
+}
+
+function parseCSVLine(line) {
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQ = !inQ; }
+    else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+    else cur += line[i];
+  }
+  result.push(cur);
+  return result;
+}
+
+var fieldDefs = [
+  { key:'name',       label:'인플루언서명',  auto:['인플루언서명','인플루언서','이름'] },
+  { key:'product',    label:'제품',         auto:['제품','상품','인플&제품','product'] },
+  { key:'month',      label:'월',           auto:['월','month'] },
+  { key:'campaign',   label:'캠페인 이름',   auto:['캠페인 이름','캠페인명','campaign'] },
+  { key:'adset',      label:'광고 세트 이름',auto:['광고 세트 이름','광고세트','adset'] },
+  { key:'adname',     label:'광고 이름',     auto:['광고 이름','광고명'] },
+  { key:'impressions',label:'노출',         auto:['노출','노출수','impressions'] },
+  { key:'clicks',     label:'링크 클릭',     auto:['링크 클릭','클릭수','클릭','clicks'] },
+  { key:'revenue',    label:'웹사이트 구매 전환값', auto:['웹사이트 구매 전환값','구매 전환값','전환값','revenue'] },
+  { key:'orders',     label:'웹사이트 구매', auto:['웹사이트 구매','구매 건수','구매수','purchases'] },
+  { key:'spend',      label:'지출 금액 (KRW)', auto:['지출 금액 (KRW)','지출금액','지출','spend'] },
+  { key:'dateSerial', label:'일 (날짜)',        auto:['일','date','날짜'] },
+];
+
+function findAutoMatch(autos) {
+  // 1차: 정확히 일치하는 컬럼 우선
+  for (var i=0; i<csvHeaders.length; i++) {
+    for (var j=0; j<autos.length; j++) {
+      if (csvHeaders[i].trim() === autos[j]) return csvHeaders[i];
+    }
+  }
+  // 2차: 포함 관계 (auto가 헤더를 포함하는 경우만 — 더 긴 쪽이 기준)
+  for (var i=0; i<csvHeaders.length; i++) {
+    for (var j=0; j<autos.length; j++) {
+      var h = csvHeaders[i].trim().toLowerCase();
+      var a = autos[j].toLowerCase();
+      if (h === a) return csvHeaders[i];
+      // auto가 헤더보다 길거나 같을 때만 포함 체크 (짧은 auto가 긴 헤더를 잘못 잡는 것 방지)
+      if (a.length >= h.length && a.includes(h)) return csvHeaders[i];
+    }
+  }
+  return '';
+}
+
+function renderMapping() {
+  var tbody = document.getElementById('mappingBody');
+  var preview = csvData[0] || {};
+  tbody.innerHTML = fieldDefs.map(function(f){
+    var matched = findAutoMatch(f.auto);
+    var tag = matched ? '<span class="tag-auto">자동</span>' : '<span class="tag-manual">확인필요</span>';
+    var opts = '<option value="">— 건너뜀 —</option>' + csvHeaders.map(function(h){
+      return '<option value="'+h+'"'+(h===matched?' selected':'')+'>'+h+'</option>';
+    }).join('');
+    var prev = matched ? (preview[matched] || '-') : '-';
+    return '<tr><td style="color:var(--text)">'+f.label+' '+tag+'</td><td><select id="map_'+f.key+'">'+opts+'</select></td><td style="color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis">'+prev+'</td></tr>';
+  }).join('');
+}
+
+function getMap(key) { var el = document.getElementById('map_'+key); return el ? el.value : ''; }
+function getVal(row, key) { var col = getMap(key); return col ? (row[col] || '') : ''; }
+function toNum(v) { return parseFloat((v+'').replace(/,/g,'')) || 0; }
+
+async function doImport() {
+  var btn = document.getElementById('importBtn');
+  btn.disabled = true;
+  document.getElementById('importProgress').style.display = 'block';
+
+  // 매핑 테이블에서 컬럼명을 미리 직접 뽑아둠 (getVal 대신 row[colName] 직접 접근)
+  var colName = {
+    name:        getMap('name'),
+    product:     getMap('product'),
+    month:       getMap('month'),
+    campaign:    getMap('campaign'),
+    adset:       getMap('adset'),
+    adname:      getMap('adname'),
+    impressions: getMap('impressions'),
+    clicks:      getMap('clicks'),
+    orders:      getMap('orders'),
+    revenue:     getMap('revenue'),
+    spend:       getMap('spend'),
+    dateSerial:  getMap('dateSerial')
+  };
+
+  // 디버그: 매핑 확인
+  console.log('컬럼 매핑:', JSON.stringify(colName));
+
+  function getCol(row, key) {
+    var col = colName[key];
+    return col ? (row[col] || '') : '';
+  }
+
+  // Step 1: 인플루언서+제품 기준으로 전체 행 집계 (TOTAL)
+  document.getElementById('importMsg').textContent = '데이터 집계 중...';
+  var aggMap = {};
+  for (var i=0; i<csvData.length; i++) {
+    var row = csvData[i];
+    var name = getCol(row,'name');
+    if (!name) continue;
+    var product = getCol(row,'product') || '';
+    var key = name + '||' + product;
+    if (!aggMap[key]) {
+      aggMap[key] = {
+        name: name, product: product,
+        campaign: getCol(row,'campaign'),
+        adset: getCol(row,'adset'), adname: getCol(row,'adname'),
+        impressions: 0, clicks: 0, orders: 0,
+        revenueRaw: 0, spendRaw: 0, months: [], monthlyStat: {}
+      };
+    }
+    var a = aggMap[key];
+    a.impressions += toNum(getCol(row,'impressions'));
+    a.clicks      += toNum(getCol(row,'clicks'));
+    a.orders      += toNum(getCol(row,'orders'));
+    a.revenueRaw  += toNum(getCol(row,'revenue'));
+    a.spendRaw    += toNum(getCol(row,'spend'));
+    // 일 컬럼(엑셀 시리얼)으로 연월 산출, 없으면 구분월 fallback
+    var ym = null;
+    var dateSerial = getCol(row,'dateSerial');
+    if (dateSerial && parseInt(dateSerial) > 40000) {
+      ym = excelSerialToYearMonth(dateSerial);
+    }
+    var mKey = ym ? ym.key : null;
+    var mLabel = ym ? yearMonthLabel(ym.key) : (getCol(row,'month') || null);
+    if (mKey) {
+      if (a.months.indexOf(mLabel) === -1) a.months.push(mLabel);
+      if (!a.monthKeys) a.monthKeys = {};
+      a.monthKeys[mLabel] = mKey;
+      if (!a.monthlyStat[mKey]) a.monthlyStat[mKey] = {revenue:0, spend:0, orders:0, clicks:0, impressions:0, label: yearMonthLabel(mKey)};
+      a.monthlyStat[mKey].revenue     += toNum(getCol(row,'revenue')) / 10000;
+      a.monthlyStat[mKey].spend       += toNum(getCol(row,'spend')) / 10000;
+      a.monthlyStat[mKey].orders      += toNum(getCol(row,'orders'));
+      a.monthlyStat[mKey].clicks      += toNum(getCol(row,'clicks'));
+      a.monthlyStat[mKey].impressions += toNum(getCol(row,'impressions'));
+    } else if (mLabel) {
+      if (a.months.indexOf(mLabel) === -1) a.months.push(mLabel);
+    }
+    if (i % 100 === 0) {
+      document.getElementById('progressFill').style.width = Math.round(i/csvData.length*50)+'%';
+      await new Promise(function(r){ setTimeout(r,0); });
+    }
+  }
+
+  // Step 2: 집계 결과 upsert (인플루언서+제품 기준)
+  var keys = Object.keys(aggMap);
+  var added = 0, updated = 0;
+  for (var j=0; j<keys.length; j++) {
+    var a = aggMap[keys[j]];
+    var ctr     = a.impressions > 0 ? Math.round(a.clicks/a.impressions*10000)/100 : 0;
+    var cvr     = a.clicks > 0 ? Math.round(a.orders/a.clicks*10000)/100 : 0;
+    var revenue = Math.round(a.revenueRaw/10000*10)/10;
+    var spend   = Math.round(a.spendRaw/10000*10)/10;
+    var roas    = spend > 0 ? Math.round(revenue/spend*100) : 0;
+    var grade   = autoGrade(ctr, cvr, spend, revenue);
+    var monthStr = a.months.sort().join(', ');
+
+    var existIdx = records.findIndex(function(r){
+      return r.name === a.name && r.product === a.product;
+    });
+
+    if (existIdx > -1) {
+      var existing = records[existIdx];
+      records[existIdx] = Object.assign({}, existing, {
+        campaign: a.campaign || existing.campaign,
+        ctr: ctr, cvr: cvr, orders: a.orders,
+        revenue: revenue, spend: spend, roas: roas,
+        impressions: a.impressions, clicks: a.clicks,
+        months: monthStr, monthlyStat: a.monthlyStat||{}, grade: grade
+      });
+      updated++;
+    } else {
+      records.push({
+        id: Date.now()+j,
+        name: a.name, product: a.product,
+        months: monthStr, monthlyStat: a.monthlyStat||{},
+        campaign: a.campaign, adset: a.adset, adname: a.adname,
+        ctr: ctr, cvr: cvr, orders: a.orders,
+        revenue: revenue, spend: spend, roas: roas,
+        impressions: a.impressions, clicks: a.clicks,
+        views: 0, comments: 0,
+        hook:'', narrative:'', message:'', style:'', cta:'',
+        memo:'', link:'', size:'', cat:'',
+        uploadDate:'', analyzedDate:'', campaignDays:'',
+        grade: grade,
+        date: new Date().toLocaleDateString('ko-KR'), fromCSV: true
+      });
+      added++;
+    }
+    document.getElementById('progressFill').style.width = (50+Math.round((j+1)/keys.length*50))+'%';
+    document.getElementById('importMsg').textContent = 'DB 저장 중... '+(j+1)+'/'+keys.length+'건';
+    if (j % 10 === 0) await new Promise(function(r){ setTimeout(r,0); });
+  }
+
+  // 백업된 질적 데이터 복원
+  var backupStr = localStorage.getItem('rl_qual_backup');
+  if (backupStr) {
+    try {
+      var backup = JSON.parse(backupStr);
+      var restored = 0;
+      records.forEach(function(r, idx){
+        var key = r.name + '||' + (r.product||'');
+        if (backup[key]) {
+          records[idx] = Object.assign({}, r, backup[key]);
+          restored++;
+        }
+      });
+      if (restored > 0) {
+        localStorage.removeItem('rl_qual_backup');
+        document.getElementById('importMsg').textContent = '완료! 신규 '+added+'건 추가, '+updated+'건 업데이트 + 질적 데이터 '+restored+'건 복원';
+      }
+    } catch(e) {}
+  }
+
+  save();
+  document.getElementById('importMsg').textContent += ' (완료)';
+  document.getElementById('progressFill').style.width = '100%';
+  btn.disabled = false;
+  setTimeout(function(){ switchTab('raw'); populateInfDropdown(); updateBadges(); }, 1500);
+}
+
+
+function calcRoas(revenue, spend) {
+  if (!spend || spend <= 0) return 0;
+  return Math.round(revenue / spend * 100);
+}
+
+function autoGrade(ctr, cvr, spend, revenue) {
+  var spendWon = (spend || 0) * 10000;
+  if (spendWon < 50000) return '기준미달';
+
+  // 매출 3천만원 이상 → 무조건 S
+  if ((revenue || 0) >= 3000) return 'S';
+
+  var roas = calcRoas(revenue || 0, spend || 0);
+
+  var allCTR = records.filter(function(r){ return r.ctr > 0; }).map(function(r){ return r.ctr; });
+  allCTR.sort(function(a,b){ return b-a; });
+  var top20CTR = allCTR.length >= 5 ? (allCTR[Math.floor(allCTR.length*0.2)] || 0) : 2.66;
+  var top30CTR = allCTR.length >= 5 ? (allCTR[Math.floor(allCTR.length*0.3)] || 0) : 2.51;
+  var isTop20CTR = ctr >= top20CTR;
+  var isTop30CTR = ctr >= top30CTR;
+
+  // S: ROAS 230% 이상 + CTR 상위 20%
+  if (roas >= 230 && isTop20CTR) return 'S';
+  // A: ROAS 200% 이상 + CTR 상위 30%
+  if (roas >= 200 && isTop30CTR) return 'A';
+  // B: ROAS 170% 이상
+  if (roas >= 170) return 'B';
+  // C: ROAS 130% 이상
+  if (roas >= 130) return 'C';
+  // F: ROAS 100% 이상
+  if (roas >= 100) return 'F';
+  return 'F-';
+}
+
+function resetImport() {
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('csvFile').value = '';
+  csvData = []; csvHeaders = [];
+}
+
+document.querySelectorAll('.chip-group').forEach(function(group){
+  group.querySelectorAll('.chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      group.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('selected'); });
+      chip.classList.toggle('selected');
+    });
+  });
+});
+
+function getChip(id) { var s = document.querySelector('#'+id+' .chip.selected'); return s ? s.dataset.val : ''; }
+
+async function runAnalysis() {
+  var today = new Date();
+  var todayStr = today.toLocaleDateString('ko-KR');
+  var uploadDateVal = document.getElementById('inf-uploaddate').value;
+  var campaignDays = '';
+  if (uploadDateVal) {
+    var upload = new Date(uploadDateVal);
+    var diff = Math.floor((today - upload) / (1000*60*60*24));
+    campaignDays = diff >= 0 ? diff + '일' : '';
+  }
+  document.getElementById('inf-analyzeddate').value = todayStr;
+  var d = {
+    name: document.getElementById('inf-name').value.trim(),
+    product: document.getElementById('inf-product').value.trim(),
+    link: document.getElementById('inf-link').value.trim(),
+    size: document.getElementById('inf-size').value,
+    cat: document.getElementById('inf-cat').value,
+    ctr: parseFloat(document.getElementById('m-ctr').value)||0,
+    cvr: parseFloat(document.getElementById('m-cvr').value)||0,
+    orders: parseInt(document.getElementById('m-orders').value)||0,
+    revenue: parseInt(document.getElementById('m-revenue').value)||0,
+    views: parseInt(document.getElementById('m-views').value)||0,
+    likes: parseInt(document.getElementById('m-likes').value)||0,
+    comments: parseInt(document.getElementById('m-comments').value)||0,
+    uploadDate: uploadDateVal,
+    analyzedDate: todayStr,
+    campaignDays: campaignDays,
+    hook: getChip('chips-hook'), hookSub: getChip('chips-hook-sub'), narrative: getChip('chips-narrative'),
+    message: getChip('chips-message'), style: getChip('chips-style'), cta: getChip('chips-cta'),
+    narration: getChip('chips-narration'),
+    script: document.getElementById('script-input').value.trim(),
+    memo: document.getElementById('memo').value.trim(),
+    date: todayStr
+  };
+  // 선택된 인플루언서+제품의 spend 자동 주입
+  var _selRec = records.find(function(r){ return r.name === d.name && r.product === d.product; });
+  if (_selRec) { d.spend = _selRec.spend || 0; d.roas = _selRec.roas || 0; }
+  else { d.spend = 0; }
+  if (!d.name || !d.product) { alert('인플루언서명과 제품을 선택해주세요.'); return; }
+  var btn = document.getElementById('analyzeBtn'); btn.disabled = true;
+  var resultEl = document.getElementById('ai-result');
+  resultEl.innerHTML = '<div class="ai-box"><div class="loading-box"><div class="spinner"></div>AI가 분석하고 있어요...</div></div>';
+  var gradedRecs = records.filter(function(r){ return r.ctr>0; });
+  var avgCTR = gradedRecs.length > 0 ? (gradedRecs.reduce(function(a,r){ return a+r.ctr; },0)/gradedRecs.length).toFixed(1) : 2.0;
+  var avgCVR = gradedRecs.filter(function(r){ return r.cvr>0; }).length > 0 ? (gradedRecs.filter(function(r){ return r.cvr>0; }).reduce(function(a,r){ return a+r.cvr; },0)/gradedRecs.filter(function(r){ return r.cvr>0; }).length).toFixed(1) : 1.5;
+  var prompt = '당신은 인플루언서 릴스 광고 전문 분석가입니다.\n\n[성과 지표] CTR: '+d.ctr+'% (평균 '+avgCTR+'%), CVR: '+d.cvr+'% (평균 '+avgCVR+'%), 구매: '+d.orders+'건, 매출: '+d.revenue+'만원\n[인플루언서] '+d.name+' '+d.size+' '+d.cat+'\n[콘텐츠 코드] 훅:'+(d.hook||'미입력')+' / 구조:'+(d.narrative||'미입력')+' / 소구:'+(d.message||'미입력')+' / 노출:'+(d.style||'미입력')+' / CTA:'+(d.cta||'미입력')+' / 내레이션:'+(d.narration||'미입력')+'\n[메모] '+(d.memo||'없음')+'\n\nJSON만 응답:\n{"grade":"S/A/B/C","gradeReason":"1문장","insights":["인사이트1","인사이트2","인사이트3"],"guideSuggestion":"브리핑 가이드 추가 제안 1줄","watchOut":"개선점 1줄"}';
+  try {
+    var resp = await apiFetch(prompt, 1000);
+    var data = await resp.json();
+    var raw = data.content.map(function(i){ return i.text||''; }).join('');
+    var parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    var calcedGrade = autoGrade(d.ctr, d.cvr, d.spend||0, d.revenue||0);
+    var finalGrade = calcedGrade !== '미분류' ? calcedGrade : parsed.grade;
+
+    var existIdx = records.findIndex(function(r){
+      return r.name === d.name && r.product === d.product;
+    });
+    if (existIdx > -1) {
+      records[existIdx] = Object.assign({}, records[existIdx], {
+        hook: d.hook, hookSub: d.hookSub||'',
+        narrative: d.narrative, message: d.message,
+        style: d.style, cta: d.cta, narration: d.narration,
+        memo: d.memo, link: d.link, size: d.size, cat: d.cat,
+        uploadDate: d.uploadDate, analyzedDate: d.analyzedDate,
+        campaignDays: d.campaignDays, views: d.views||0, likes: d.likes||0, comments: d.comments||0,
+        script: d.script||'',
+        aiInsights: parsed.insights||[], aiGuide: parsed.guideSuggestion||'',
+        aiWatchOut: parsed.watchOut||'', grade: finalGrade
+      });
+    } else {
+      var record = Object.assign({}, d, {
+        grade: finalGrade, id: Date.now(), fromCSV: false, hookSub: d.hookSub||'',
+        script: d.script||'',
+        aiInsights: parsed.insights||[], aiGuide: parsed.guideSuggestion||'',
+        aiWatchOut: parsed.watchOut||''
+      });
+      records.push(record);
+    }
+    save();
+    var notionText = '인플루언서: '+d.name+' | 등급: '+parsed.grade+' | CTR: '+d.ctr+'% | CVR: '+d.cvr+'% | 구매: '+d.orders+'건\n훅: '+d.hook+' | 구조: '+d.narrative+' | 소구: '+d.message+' | 내레이션: '+d.narration+'\n인사이트: '+parsed.insights.join(' / ')+'\n가이드 제안: '+parsed.guideSuggestion;
+    resultEl.innerHTML = '<div class="ai-box"><div class="ai-header"><div class="ai-label">AI 분석 결과</div><div class="grade-badge grade-'+finalGrade+'">'+finalGrade+'등급</div></div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+parsed.gradeReason+'</div><div class="section-title" style="margin-bottom:8px">핵심 인사이트</div><div class="insight-list">'+parsed.insights.map(function(i){ return '<div class="insight-item"><div class="insight-dot"></div><span>'+i+'</span></div>'; }).join('')+'</div><div style="margin-top:14px;padding:12px;background:rgba(61,214,140,0.07);border-radius:8px;border:1px solid rgba(61,214,140,0.2)"><div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:4px">가이드 추가 제안</div><div style="font-size:13px;color:var(--text2)">'+parsed.guideSuggestion+'</div></div><div style="margin-top:10px;padding:12px;background:rgba(245,166,35,0.07);border-radius:8px;border:1px solid rgba(245,166,35,0.2)"><div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:4px">개선 포인트</div><div style="font-size:13px;color:var(--text2)">'+parsed.watchOut+'</div></div><div style="margin-top:14px"><div class="section-title" style="margin-bottom:6px">노션 복붙용</div><div class="copy-box" id="copyText">'+notionText+'</div><button class="btn btn-ghost" style="margin-top:8px;font-size:12px" onclick="navigator.clipboard.writeText(document.getElementById(\'copyText\').innerText).then(function(){ alert(\'복사됐어요!\'); })">클립보드 복사</button></div></div>';
+  } catch(e) {
+    resultEl.innerHTML = '<div class="ai-box"><div style="color:var(--red);font-size:13px">분석 중 오류가 발생했어요.</div></div>';
+  }
+  btn.disabled = false;
+}
+
+function populateInfDropdown() {
+  var sel = document.getElementById('inf-name');
+  if (!sel) return;
+  var current = sel.value;
+  sel.innerHTML = '<option value="">— 선택 —</option>';
+  var names = [];
+  records.forEach(function(r){ if (r.name && names.indexOf(r.name) === -1) names.push(r.name); });
+  names.sort().forEach(function(n){
+    var opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    if (n === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function onInfChange() {
+  var name = document.getElementById('inf-name').value;
+  var prodSel = document.getElementById('inf-product');
+  prodSel.innerHTML = '<option value="">— 제품 선택 —</option>';
+  clearMetrics();
+  if (!name) return;
+  var products = [];
+  records.forEach(function(r){
+    if (r.name === name && r.product && products.indexOf(r.product) === -1) products.push(r.product);
+  });
+  products.sort().forEach(function(p){
+    var opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    prodSel.appendChild(opt);
+  });
+  if (products.length === 1) {
+    prodSel.value = products[0];
+    onProductChange();
+  }
+}
+
+function onProductChange() {
+  var name = document.getElementById('inf-name').value;
+  var product = document.getElementById('inf-product').value;
+  if (!name || !product) { clearMetrics(); return; }
+  var rec = null;
+  for (var i = 0; i < records.length; i++) {
+    if (records[i].name === name && records[i].product === product) { rec = records[i]; break; }
+  }
+  if (!rec) { clearMetrics(); return; }
+  document.getElementById('m-ctr').value     = rec.ctr || 0;
+  document.getElementById('m-cvr').value     = rec.cvr || 0;
+  document.getElementById('m-orders').value  = rec.orders || 0;
+  document.getElementById('m-revenue').value = rec.revenue || 0;
+  var roas = rec.roas || (rec.spend > 0 ? Math.round(rec.revenue / rec.spend * 100) : 0);
+  document.getElementById('roas-display').textContent = 'ROAS ' + roas + '%';
+  var gEl = document.getElementById('grade-display');
+  gEl.innerHTML = '현재 등급 <span class="grade-tag ' + gradeClass(rec.grade) + '">' + (rec.grade || '?') + '</span>';
+  document.getElementById('metrics-auto-badge').style.display = 'inline';
+  document.getElementById('metrics-hint').textContent = name + ' × ' + product + ' 누적 데이터';
+}
+
+function clearMetrics() {
+  ['m-ctr','m-cvr','m-orders','m-revenue'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var rd = document.getElementById('roas-display');
+  var gd = document.getElementById('grade-display');
+  var mh = document.getElementById('metrics-hint');
+  var mb = document.getElementById('metrics-auto-badge');
+  if (rd) rd.textContent = '';
+  if (gd) gd.innerHTML = '';
+  if (mh) mh.textContent = '인플루언서+제품 선택 시 자동으로 채워져요.';
+  if (mb) mb.style.display = 'none';
+}
+
+var _scriptResult = {};
+
+async function analyzeScript() {
+  var script = document.getElementById('script-input').value.trim();
+  if (!script) { alert('스크립트를 입력해주세요.'); return; }
+  var btn = document.getElementById('scriptAnalyzeBtn');
+  var status = document.getElementById('script-analyze-status');
+  btn.disabled = true; status.textContent = 'AI 분석 중...';
+  document.getElementById('script-result').style.display = 'none';
+
+  var prompt = '당신은 생활용품(욕실화, 욕실용품) 인플루언서 릴스 광고 전문 분석가예요.\n\n아래 영상 스크립트를 분석해서 JSON으로만 응답해주세요.\n\n[스크립트]\n' + script + '\n\n[분류 기준]\n훅 주요 유형: 질문형, 충격정보형, 공감형, 비주얼임팩트, 정보나열형\n훅 보조 유형: 질문형, 충격정보형, 공감형, 비주얼임팩트, 정보나열형, 없음\n내러티브 구조: 문제→해결형, Before-After, 일상/집꾸미기형, 언박싱/첫인상형, 기능시연형, 비교형\n소구 포인트: 기능/성분, 감성/라이프스타일, 가격/가성비, 사회적증거, 희소성/긴급성\n광고 노출 방식: 자연녹아들기, 광고선언형, 전문가추천형\nCTA 방식: 링크클릭유도, 댓글유도, 저장유도, CTA없음\n\n반드시 아래 JSON 형식으로만 응답:\n{"hookMain":"","hookSub":"","narrative":"","message":"","style":"","cta":"","reason":{"hookMain":"선택 이유 1줄","narrative":"선택 이유 1줄","message":"선택 이유 1줄"}}';
+
+  try {
+    var resp = await apiFetch(prompt, 500);
+    var data = await resp.json();
+    var raw = (data.content[0].text || '').trim().replace(/```json|```/g,'').trim();
+    _scriptResult = JSON.parse(raw);
+
+    var fields = [
+      { label:'훅 (주요)',   val:_scriptResult.hookMain,  reason:_scriptResult.reason && _scriptResult.reason.hookMain },
+      { label:'훅 (보조)',   val:_scriptResult.hookSub,   reason:null },
+      { label:'내러티브 구조', val:_scriptResult.narrative, reason:_scriptResult.reason && _scriptResult.reason.narrative },
+      { label:'소구 포인트', val:_scriptResult.message,   reason:_scriptResult.reason && _scriptResult.reason.message },
+      { label:'광고 노출',   val:_scriptResult.style,     reason:null },
+      { label:'CTA',        val:_scriptResult.cta,       reason:null },
+    ];
+
+    var html = fields.map(function(f){
+      return '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;padding:8px 10px;background:var(--surface2);border-radius:6px">' +
+        '<div style="font-size:11px;color:var(--text3);min-width:80px;padding-top:2px">' + f.label + '</div>' +
+        '<div>' +
+          '<span style="font-size:13px;color:var(--accent2);font-weight:500">' + (f.val||'-') + '</span>' +
+          (f.reason ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + f.reason + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('script-result-content').innerHTML = html;
+    document.getElementById('script-result').style.display = 'block';
+    status.textContent = '분석 완료!';
+  } catch(e) {
+    status.innerHTML = '<span style="color:var(--red)">오류 발생 — API 키를 확인해주세요</span>';
+  }
+  btn.disabled = false;
+}
+
+function applyScriptResult() {
+  if (!_scriptResult || !_scriptResult.hookMain) { alert('먼저 스크립트 분석을 실행해주세요.'); return; }
+
+  function selectChip(groupId, val) {
+    if (!val) return;
+    document.querySelectorAll('#' + groupId + ' .chip').forEach(function(c){ c.classList.remove('selected'); });
+    var target = document.querySelector('#' + groupId + ' .chip[data-val="' + val + '"]');
+    if (target) target.classList.add('selected');
+  }
+
+  function showRec(boxId, valId, val, reasonId, reason) {
+    var box = document.getElementById(boxId);
+    var valEl = document.getElementById(valId);
+    if (!box || !valEl || !val) return;
+    valEl.textContent = val;
+    if (reasonId && reason) {
+      var rEl = document.getElementById(reasonId);
+      if (rEl) rEl.textContent = '— ' + reason;
+    }
+    box.style.display = 'flex';
+  }
+
+  var r = _scriptResult;
+  var reason = r.reason || {};
+
+  selectChip('chips-hook',      r.hookMain);
+  selectChip('chips-hook-sub',  r.hookSub);
+  selectChip('chips-narrative', r.narrative);
+  selectChip('chips-message',   r.message);
+  selectChip('chips-style',     r.style);
+  selectChip('chips-cta',       r.cta);
+
+  showRec('ai-rec-hook',      'ai-rec-hook-val',      r.hookMain,  'ai-rec-hook-reason',      reason.hookMain);
+  showRec('ai-rec-hook-sub',  'ai-rec-hook-sub-val',  r.hookSub,   null,                      null);
+  showRec('ai-rec-narrative', 'ai-rec-narrative-val', r.narrative, 'ai-rec-narrative-reason', reason.narrative);
+  showRec('ai-rec-message',   'ai-rec-message-val',   r.message,   'ai-rec-message-reason',   reason.message);
+  showRec('ai-rec-style',     'ai-rec-style-val',     r.style,     null,                      null);
+  showRec('ai-rec-cta',       'ai-rec-cta-val',       r.cta,       null,                      null);
+
+  document.getElementById('script-analyze-status').innerHTML = '<span style="color:var(--green)">✓ 항목 자동 적용 완료</span>';
+}
+
+async function classifyHook() {
+  var text = document.getElementById('hook-text-input').value.trim();
+  if (!text) { alert('훅 문구를 입력해주세요.'); return; }
+  var btn = document.getElementById('hookClassifyBtn');
+  btn.disabled = true; btn.textContent = '분류 중...';
+  document.getElementById('hook-classify-result').textContent = '';
+  var hookTypes = ['질문형','충격정보형','공감형','비주얼임팩트','정보나열형'];
+  var prompt = '다음 릴스 광고 훅 문구를 아래 5가지 유형 중 하나로 분류해줘. 반드시 유형명만 답해.\n\n유형: ' + hookTypes.join(', ') + '\n\n훅 문구: "' + text + '"\n\n유형명만:';
+  try {
+    var resp = await apiFetch(prompt, 20);
+    var data = await resp.json();
+    var result = (data.content[0].text || '').trim();
+    var matched = hookTypes.find(function(t){ return result.indexOf(t) > -1; });
+    if (matched) {
+      document.querySelectorAll('#chips-hook .chip').forEach(function(c){ c.classList.remove('selected'); });
+      var target = document.querySelector('#chips-hook .chip[data-val="' + matched + '"]');
+      if (target) target.classList.add('selected');
+      document.getElementById('hook-classify-result').innerHTML = '<span style="color:var(--green)">→ ' + matched + '으로 분류됐어요</span>';
+    } else {
+      document.getElementById('hook-classify-result').innerHTML = '<span style="color:var(--amber)">직접 선택해주세요 (AI 응답: ' + result + ')</span>';
+    }
+  } catch(e) {
+    document.getElementById('hook-classify-result').innerHTML = '<span style="color:var(--red)">오류 발생</span>';
+  }
+  btn.disabled = false; btn.textContent = 'AI 분류';
+}
+
+function resetForm() {
+  document.querySelectorAll('#pane-analyze input[type=text], #pane-analyze input[type=date], #pane-analyze textarea').forEach(function(el){ el.value=''; });
+  document.querySelectorAll('#pane-analyze select').forEach(function(el){ el.value=''; });
+  document.querySelectorAll('.chip').forEach(function(el){ el.classList.remove('selected'); });
+  document.getElementById('ai-result').innerHTML = '';
+  var hti = document.getElementById('hook-text-input');
+  var hcr = document.getElementById('hook-classify-result');
+  if (hti) hti.value = '';
+  if (hcr) hcr.textContent = '';
+  var si = document.getElementById('script-input');
+  var sr = document.getElementById('script-result');
+  var ss = document.getElementById('script-analyze-status');
+  if (si) si.value = '';
+  if (sr) sr.style.display = 'none';
+  if (ss) ss.textContent = '';
+  _scriptResult = {};
+  ['ai-rec-hook','ai-rec-hook-sub','ai-rec-narrative','ai-rec-message','ai-rec-style','ai-rec-cta'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  clearMetrics();
+  populateInfDropdown();
+}
+
+function gradeClass(g) { return {'S':'grade-S','A':'grade-A','B':'grade-B','C':'grade-C','F':'grade-F','F-':'grade-F-','기준미달':'grade-기준미달'}[g]||''; }
+
+function roasColor(v) { return v>=230?'var(--green)':v>=200?'var(--accent2)':v>=170?'var(--amber)':v>=100?'var(--text2)':'var(--red)'; }
+function roasVal(r) { return (r.spend&&r.spend>0)?Math.round(r.revenue/r.spend*100):(r.roas||0); }
+
+function renderRaw() {
+  var fg = document.getElementById('raw-filter-grade').value;
+  var fs = (document.getElementById('raw-filter-search').value||'').toLowerCase();
+  var raw = records.filter(function(r){ return !isAnalyzed(r); }).filter(function(r){
+    return (!fg||r.grade===fg)&&(!fs||(r.name||'').toLowerCase().includes(fs));
+  });
+  var body = document.getElementById('rawBody');
+  var empty = document.getElementById('rawEmpty');
+  if (!raw.length) { body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  var rv = 0;
+  body.innerHTML = raw.slice().reverse().map(function(r){
+    rv = roasVal(r);
+    var months = r.months||r.month||'-';
+    return '<tr>' +
+      '<td style="color:var(--text);font-weight:500">'+(r.name||'-')+'</td>' +
+      '<td style="color:var(--text2)">'+(r.product||'-')+'</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+months+'</td>' +
+      '<td><span class="grade-tag '+gradeClass(r.grade)+'">'+(r.grade||'?')+'</span></td>' +
+      '<td style="font-family:var(--mono);color:'+roasColor(rv)+'">'+rv+'%</td>' +
+      '<td style="font-family:var(--mono)">'+(r.ctr||0)+'%</td>' +
+      '<td style="font-family:var(--mono)">'+(r.cvr||0)+'%</td>' +
+      '<td style="font-family:var(--mono)">'+fmtNum(r.orders||0)+'</td>' +
+      '<td style="font-family:var(--mono)">'+fmtWon(r.revenue||0)+'</td>' +
+      '<td style="font-family:var(--mono)">'+fmtWon(r.spend||0)+'</td>' +
+      '<td><button class="btn btn-ghost" onclick="goAnalyze(this)" data-name="'+encodeURIComponent(r.name||'')+'" data-product="'+encodeURIComponent(r.product||'')+'" style="font-size:11px;padding:4px 10px;color:var(--accent2)">분석하기 →</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderDone() {
+  var fg = document.getElementById('done-filter-grade').value;
+  var fh = document.getElementById('done-filter-hook').value;
+  var fs = (document.getElementById('done-filter-search').value||'').toLowerCase();
+  var done = records.filter(function(r){ return isAnalyzed(r); }).filter(function(r){
+    return (!fg||r.grade===fg)&&(!fh||r.hook===fh)&&(!fs||(r.name||'').toLowerCase().includes(fs));
+  });
+  var body = document.getElementById('doneBody');
+  var empty = document.getElementById('doneEmpty');
+  if (!done.length) { body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = done.slice().reverse().map(function(r){
+    var rv = roasVal(r);
+    var months = r.months||r.month||'-';
+    var hookDisp = r.hook||(r.hookSub?'+'+r.hookSub:'');
+    return '<tr style="cursor:pointer" data-id="'+r.id+'" onclick="openPanel(this.dataset.id)">' +
+      '<td style="color:var(--text);font-weight:500">'+(r.name||'-')+'</td>' +
+      '<td style="color:var(--text2)">'+(r.product||'-')+'</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+months+'</td>' +
+      '<td><span class="grade-tag '+gradeClass(r.grade)+'">'+(r.grade||'?')+'</span></td>' +
+      '<td style="font-family:var(--mono);color:'+roasColor(rv)+'">'+rv+'%</td>' +
+      '<td style="font-family:var(--mono)">'+(r.ctr||0)+'%</td>' +
+      '<td style="font-family:var(--mono)">'+(r.cvr||0)+'%</td>' +
+      '<td style="font-family:var(--mono)">'+fmtNum(r.orders||0)+'</td>' +
+      '<td style="font-family:var(--mono)">'+fmtWon(r.revenue||0)+'</td>' +
+      '<td>'+(hookDisp||'-')+'</td>' +
+      '<td>'+(r.narrative||'-')+'</td>' +
+      '<td>'+(r.narration||'-')+'</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function goAnalyze(btn) {
+  var name = decodeURIComponent(btn.getAttribute('data-name'));
+  var product = decodeURIComponent(btn.getAttribute('data-product'));
+  switchTab('analyze');
+  setTimeout(function(){
+    populateInfDropdown();
+    setTimeout(function(){
+      var selName = document.getElementById('inf-name');
+      if (selName) { selName.value = name; onInfChange(); }
+      setTimeout(function(){
+        var selProd = document.getElementById('inf-product');
+        if (selProd) { selProd.value = product; onProductChange(); }
+      }, 150);
+    }, 150);
+  }, 150);
+}
+
+var _panelId = null;
+
+function openPanel(id) {
+  var r = records.find(function(x){ return String(x.id)===String(id); });
+  if (!r) return;
+  _panelId = id;
+  document.getElementById('panel-title').textContent = (r.name||'-') + ' × ' + (r.product||'-');
+
+  var rv = roasVal(r);
+  var months = (r.months||r.month||'').split(',').map(function(m){ return m.trim(); }).filter(Boolean);
+  var monthlyStat = r.monthlyStat || {};
+
+  // 월별 그래프 HTML (Chart.js)
+  var chartHtml = '';
+  var statKeyCount = Object.keys(monthlyStat).length;
+  if (statKeyCount > 1) {
+    chartHtml = '<div style="margin-bottom:20px"><canvas id="panel-chart" height="140"></canvas></div>';
+  }
+
+  var html = chartHtml;
+
+  // 성과 요약
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+  var stats = [
+    {label:'등급', val:'<span class="grade-tag '+gradeClass(r.grade)+'">'+(r.grade||'?')+'</span>'},
+    {label:'ROAS', val:'<span style="color:'+roasColor(rv)+'">'+rv+'%</span>'},
+    {label:'CTR', val:(r.ctr||0)+'%'}, {label:'CVR', val:(r.cvr||0)+'%'},
+    {label:'구매건수', val:fmtNum(r.orders||0)+'건'}, {label:'매출', val:fmtWon(r.revenue||0)},
+    {label:'지출', val:fmtWon(r.spend||0)}, {label:'조회수', val:fmtViews(r.views||0)},
+    {label:'좋아요', val:fmtNum(r.likes||0)}, {label:'댓글', val:fmtNum(r.comments||0)},
+  ];
+  stats.forEach(function(s){
+    html += '<div style="padding:10px;background:var(--surface2);border-radius:8px">' +
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">'+s.label+'</div>' +
+      '<div style="font-size:14px;font-weight:500;color:var(--text)">'+s.val+'</div></div>';
+  });
+  html += '</div>';
+
+  // 질적 분석
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin-bottom:10px;text-transform:uppercase">질적 분석</div>';
+  var quals = [
+    {label:'훅 (주요)', val:r.hook||'-'},
+    {label:'훅 (보조)', val:(r.hookSub&&r.hookSub!=='없음')?r.hookSub:'-'},
+    {label:'내러티브', val:r.narrative||'-'},
+    {label:'소구 포인트', val:r.message||'-'},
+    {label:'광고 노출', val:r.style||'-'},
+    {label:'CTA', val:r.cta||'-'},
+    {label:'내레이션', val:r.narration||'-'},
+  ];
+  quals.forEach(function(q){
+    html += '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">' +
+      '<span style="color:var(--text3)">'+q.label+'</span>' +
+      '<span style="color:var(--text);font-weight:500">'+q.val+'</span></div>';
+  });
+  html += '</div>';
+
+  // AI 인사이트 (저장된 경우)
+  if (r.aiInsights && r.aiInsights.length) {
+    html += '<div style="margin-bottom:16px;padding:14px;background:rgba(124,108,250,0.07);border:1px solid rgba(124,108,250,0.2);border-radius:10px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--accent2);letter-spacing:0.08em;margin-bottom:10px">AI 인사이트</div>';
+    r.aiInsights.forEach(function(ins){
+      html += '<div style="display:flex;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px"><div style="width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>'+ins+'</div>';
+    });
+    if (r.aiGuide) html += '<div style="margin-top:10px;padding:8px;background:rgba(61,214,140,0.07);border-radius:6px;font-size:12px;color:var(--text2)"><span style="color:var(--green);font-weight:600;font-size:10px">가이드 제안 </span>'+r.aiGuide+'</div>';
+    html += '</div>';
+  }
+
+  // 메모
+  if (r.memo) {
+    html += '<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text2)">'+r.memo+'</div>';
+  }
+
+  // 스크립트 보기
+  if (r.script) {
+    html += '<div style="margin-bottom:16px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin-bottom:8px;text-transform:uppercase">스크립트</div>';
+    html += '<div style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.8;white-space:pre-wrap">'+r.script+'</div>';
+    html += '</div>';
+  }
+
+  // 링크
+  if (r.link) {
+    html += '<a href="'+r.link+'" target="_blank" style="display:block;padding:10px 14px;background:rgba(124,108,250,0.1);border:1px solid rgba(124,108,250,0.2);border-radius:8px;font-size:12px;color:var(--accent2);text-decoration:none;margin-bottom:16px">📱 인스타그램에서 보기 →</a>';
+  }
+
+  // 날짜
+  html += '<div style="font-size:11px;color:var(--text3);line-height:1.8">';
+  if (r.uploadDate) html += '업로드일: '+r.uploadDate+'<br>';
+  if (r.analyzedDate) html += '분석일: '+r.analyzedDate+'<br>';
+  if (r.campaignDays) html += '캠페인 기간: '+r.campaignDays;
+  html += '</div>';
+
+  document.getElementById('panel-content').innerHTML = html;
+  document.getElementById('side-panel').style.display = 'block';
+  document.getElementById('panel-overlay').style.display = 'block';
+
+  // 월별 차트 렌더링
+  if (Object.keys(monthlyStat).length > 1) {
+    setTimeout(function(){
+      var ctx = document.getElementById('panel-chart');
+      if (!ctx) return;
+      // monthlyStat 키(YYYY-MM) 기준으로 정렬 후 최근 6개월만
+      var statKeys = Object.keys(monthlyStat).sort();
+      statKeys = statKeys.slice(-6);
+      labels = statKeys.map(function(k){ return monthlyStat[k].label || yearMonthLabel(k); });
+      roasData = statKeys.map(function(k){ return monthlyStat[k].spend > 0 ? Math.round(monthlyStat[k].revenue/monthlyStat[k].spend*100) : 0; });
+      revData  = statKeys.map(function(k){ return Math.round(monthlyStat[k].revenue||0); });
+
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '매출(만원)', data: revData, type:'bar',
+              backgroundColor: 'rgba(61,214,140,0.3)', borderColor: '#3dd68c', borderWidth:1,
+              yAxisID:'y1',
+              datalabels: { display: true }
+            },
+            {
+              label: 'ROAS(%)', data: roasData, type:'line',
+              borderColor:'#a896ff', backgroundColor:'rgba(168,150,255,0.1)',
+              pointBackgroundColor:'#a896ff', tension:0.3, borderWidth:2, yAxisID:'y'
+            }
+          ]
+        },
+        options: {
+          responsive:true, interaction:{mode:'index',intersect:false},
+          plugins:{
+            legend:{ labels:{ color:'#8888a0', font:{size:11} } },
+            tooltip:{
+              callbacks:{
+                label: function(ctx){
+                  if (ctx.dataset.label.includes('매출')) return '매출: ' + fmtRevChart(ctx.raw);
+                  return 'ROAS: ' + ctx.raw + '%';
+                }
+              }
+            }
+          },
+          scales: {
+            x:{ ticks:{color:'#8888a0',font:{size:11}}, grid:{color:'rgba(255,255,255,0.05)'} },
+            y:{ ticks:{color:'#8888a0',font:{size:11},callback:function(v){return v+'%'}}, grid:{color:'rgba(255,255,255,0.05)'}, title:{display:true,text:'ROAS',color:'#8888a0',font:{size:10}} },
+            y1:{ position:'right', ticks:{color:'#3dd68c',font:{size:11},callback:function(v){return fmtRevChart(v)}}, grid:{drawOnChartArea:false}, title:{display:true,text:'매출',color:'#3dd68c',font:{size:10}} }
+          }
+        }
+      });
+    }, 100);
+  }
+}
+
+function closePanel() {
+  document.getElementById('side-panel').style.display = 'none';
+  document.getElementById('panel-overlay').style.display = 'none';
+  _panelId = null;
+}
+
+function editFromPanel() {
+  if (!_panelId) return;
+  var r = records.find(function(x){ return String(x.id)===String(_panelId); });
+  if (!r) return;
+  closePanel();
+  var fakeBtn = { getAttribute: function(a){ return a==='data-name'?encodeURIComponent(r.name||''):encodeURIComponent(r.product||''); } };
+  goAnalyze(fakeBtn);
+}
+
+function deleteFromPanel() {
+  if (!_panelId) return;
+  var r = records.find(function(x){ return String(x.id)===String(_panelId); });
+  if (!r) return;
+  if (!confirm((r.name||'')+'×'+(r.product||'')+' 분석 데이터를 삭제할까요?\n성과 수치(CSV 데이터)는 Raw DB에 유지돼요.')) return;
+  // 질적 항목만 초기화해서 Raw DB로 되돌림
+  records = records.map(function(rec){
+    if (String(rec.id) === String(_panelId)) {
+      return Object.assign({}, rec, {
+        hook:'', hookSub:'', narrative:'', message:'', style:'', cta:'', narration:'',
+        memo:'', uploadDate:'', analyzedDate:'', campaignDays:'',
+        views:0, comments:0, aiInsights:[], aiGuide:'', aiWatchOut:''
+      });
+    }
+    return rec;
+  });
+  save();
+  closePanel();
+  renderDone();
+  renderRaw();
+  updateBadges();
+}
+
+function exportNotion() {
+  if (!records.length) { alert('데이터가 없어요.'); return; }
+  var header = '| 인플루언서 | 제품 | 월 | 등급 | CTR | CVR | 구매 | 매출(만) | 훅 | 구조 |\n|---|---|---|---|---|---|---|---|---|---|\n';
+  var rows = records.map(function(r){
+    return '| '+(r.name||'')+' | '+(r.product||'')+' | '+(r.month||'')+' | '+(r.grade||'')+' | '+(r.ctr||0)+'% | '+(r.cvr||0)+'% | '+(r.orders||0)+' | '+(r.revenue||0)+' | '+(r.hook||'')+' | '+(r.narrative||'')+' |';
+  }).join('\n');
+  navigator.clipboard.writeText(header+rows).then(function(){ alert('노션 테이블 형식으로 복사됐어요!'); });
+}
+
+function cleanupData() {
+  var before = records.length;
+  // name+product 기준 중복 제거 (가장 최근 것 유지)
+  var seen = {};
+  var cleaned = [];
+  records.slice().reverse().forEach(function(r){
+    var key = (r.name||'') + '||' + (r.product||'');
+    if (!seen[key]) { seen[key] = true; cleaned.push(r); }
+  });
+  records = cleaned.reverse();
+  var after = records.length;
+  save(); renderRaw(); renderDone(); updateBadges();
+  alert('정리 완료! ' + before + '건 → ' + after + '건 (' + (before-after) + '건 중복 제거)');
+}
+
+function clearCSV() {
+  // fromCSV 플래그만 기준으로 삭제 — 질적 항목 여부는 판단하지 않음
+  var csvRecords = records.filter(function(r){ return r.fromCSV; });
+  var analyzedCSV = csvRecords.filter(function(r){ return r.hook || r.narrative || r.analyzedDate; });
+  var csvCount = csvRecords.length;
+
+  var msg = 'CSV로 가져온 데이터 ' + csvCount + '건을 삭제할까요?\n';
+  if (analyzedCSV.length > 0) {
+    msg += '\n⚠️ 주의: 이 중 ' + analyzedCSV.length + '건은 질적 분석이 완료된 데이터예요.\n';
+    msg += '삭제하면 성과 수치는 사라지지만 질적 항목(훅·구조 등)은 유지돼요.\n';
+  }
+  msg += '\n계속하시겠어요?';
+
+  if (!confirm(msg)) return;
+
+  // CSV 데이터 삭제 시 질적 항목은 별도 백업 후 유지
+  var qualBackup = {};
+  csvRecords.forEach(function(r){
+    if (r.hook || r.narrative || r.analyzedDate) {
+      qualBackup[r.name + '||' + (r.product||'')] = {
+        hook: r.hook, hookSub: r.hookSub, narrative: r.narrative,
+        message: r.message, style: r.style, cta: r.cta, narration: r.narration,
+        memo: r.memo, link: r.link, size: r.size, cat: r.cat,
+        uploadDate: r.uploadDate, analyzedDate: r.analyzedDate,
+        campaignDays: r.campaignDays, views: r.views, comments: r.comments,
+        aiInsights: r.aiInsights, aiGuide: r.aiGuide, aiWatchOut: r.aiWatchOut
+      };
+    }
+  });
+  localStorage.setItem('rl_qual_backup', JSON.stringify(qualBackup));
+
+  records = records.filter(function(r){ return !r.fromCSV; });
+  save(); renderRaw(); renderDone(); updateBadges();
+
+  var backupCount = Object.keys(qualBackup).length;
+  if (backupCount > 0) {
+    alert('삭제 완료! 질적 분석 데이터 ' + backupCount + '건은 백업해뒀어요.\nCSV 재업로드 후 자동으로 복원돼요.');
+  }
+}
+
+function clearAll() {
+  if (!confirm('전체 데이터를 삭제할까요?\nCSV 데이터 + 직접 입력한 분석 데이터 모두 삭제돼요.')) return;
+  records = []; save(); renderRaw(); renderDone(); updateBadges();
+}
+
+function renderPattern() {
+  var el = document.getElementById('patternContent');
+  if (records.length < 2) {
+    el.innerHTML = '<div class="no-data-msg">데이터가 2건 이상 쌓이면 패턴 분석이 시작돼요.<br>현재 ' + records.length + '건.</div>';
+    return;
+  }
+
+  var top = records.filter(function(r){ return r.grade==='S'||r.grade==='A'||r.grade==='B'; });
+  var hookCount = {}, narCount = {};
+  top.forEach(function(r){
+    if (r.hook) hookCount[r.hook] = (hookCount[r.hook]||0)+1;
+    if (r.narrative) narCount[r.narrative] = (narCount[r.narrative]||0)+1;
+  });
+  var hookTop = Object.entries(hookCount).sort(function(a,b){ return b[1]-a[1]; });
+  var narTop  = Object.entries(narCount).sort(function(a,b){ return b[1]-a[1]; });
+
+  var gradeDist = {S:0,A:0,B:0,C:0,F:0,'F-':0,'기준미달':0,'미분류':0};
+  records.forEach(function(r){ if (r.grade && gradeDist[r.grade]!==undefined) gradeDist[r.grade]++; });
+
+  var withCTR = records.filter(function(r){ return r.ctr>0; });
+  var withCVR = records.filter(function(r){ return r.cvr>0; });
+  var avgCTR  = withCTR.length ? (withCTR.reduce(function(a,r){ return a+r.ctr; },0)/withCTR.length).toFixed(2) : '-';
+  var avgCVR  = withCVR.length ? (withCVR.reduce(function(a,r){ return a+r.cvr; },0)/withCVR.length).toFixed(2) : '-';
+  var topCTR  = withCTR.length ? Math.max.apply(null,withCTR.map(function(r){ return r.ctr; })).toFixed(2) : '-';
+  var totalRevenue = records.reduce(function(a,r){ return a+(r.revenue||0); },0);
+  var totalOrders  = records.reduce(function(a,r){ return a+(r.orders||0); },0);
+  var csvPending   = records.filter(function(r){ return !r.hook && r.fromCSV; }).length;
+
+  function makeBars(items, colorClass, total) {
+    if (!items.length) return '<div style="color:var(--text3);font-size:12px">질적 데이터를 입력하면 보여요</div>';
+    return items.slice(0,5).map(function(kv){
+      var pct = Math.round(kv[1]/Math.max(total,1)*100);
+      return '<div class="bar-item">' +
+        '<div class="bar-label"><span>' + kv[0] + '</span><span>' + kv[1] + '건</span></div>' +
+        '<div class="bar-track"><div class="bar-fill ' + colorClass + '" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function makeGradeBars() {
+    var grades = ['S','A','B','C','F','F-','기준미달','미분류'];
+    var colors = {S:'green',A:'',B:'amber',C:'',F:'','F-':'','기준미달':'','미분류':''};
+    return grades.map(function(g){
+      var cnt = gradeDist[g]||0;
+      var pct = records.length ? Math.round(cnt/records.length*100) : 0;
+      return '<div class="bar-item">' +
+        '<div class="bar-label"><span>' + g + '등급</span><span>' + cnt + '건 (' + pct + '%)</span></div>' +
+        '<div class="bar-track"><div class="bar-fill ' + (colors[g]||'') + '" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function makeStatBox(val, label, color) {
+    return '<div style="text-align:center;padding:12px;background:var(--surface2);border-radius:8px">' +
+      '<div style="font-size:20px;font-weight:700;font-family:var(--mono);color:' + color + '">' + val + '</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + label + '</div>' +
+      '</div>';
+  }
+
+  function makeRow(label, val) {
+    return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-top:6px">' +
+      '<span>' + label + '</span><span style="font-family:var(--mono)">' + val + '</span></div>';
+  }
+
+  function makeCriteriaRow(grade, gradeClass, spend, roas, ctr, ratio) {
+    return '<tr>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid var(--border)"><span class="grade-tag ' + gradeClass + '">' + grade + '</span></td>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2)">' + spend + '</td>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2)">' + roas + '</td>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2)">' + ctr + '</td>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-family:var(--mono)">' + ratio + '</td>' +
+      '</tr>';
+  }
+
+  var summaryMsg = '총 <strong style="color:var(--accent2)">' + records.length + '건</strong> 중 S/A/B등급 <strong style="color:var(--green)">' + top.length + '건 (' + Math.round(top.length/records.length*100) + '%)</strong>. ';
+  if (hookTop[0]) summaryMsg += '고성과 훅은 <strong style="color:var(--accent2)">' + hookTop[0][0] + '</strong>이 ' + hookTop[0][1] + '건으로 가장 많아요. ';
+  else summaryMsg += '질적 항목을 채우면 훅 패턴이 보여요. ';
+  if (narTop[0]) summaryMsg += '내러티브는 <strong style="color:var(--accent2)">' + narTop[0][0] + '</strong>이 주로 활용됐어요.';
+  if (csvPending > 0) summaryMsg += '<br><span style="color:var(--amber)">CSV로 가져온 ' + csvPending + '건은 아직 질적 항목이 비어있어요. 새 영상 분석 탭에서 채워나가면 패턴이 더 정확해져요.</span>';
+
+  var html = '<div class="pattern-grid">';
+
+  // Hook card
+  html += '<div class="pattern-card"><div class="pattern-card-title">S/A/B등급 — 훅 유형</div>' + makeBars(hookTop,'',top.length) + '</div>';
+
+  // Narrative card
+  html += '<div class="pattern-card"><div class="pattern-card-title">S/A/B등급 — 내러티브 구조</div>' + makeBars(narTop,'green',top.length) + '</div>';
+
+  // Stats card
+  html += '<div class="pattern-card"><div class="pattern-card-title">전체 성과 요약</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">';
+  html += makeStatBox(avgCTR+'%','평균 CTR','var(--accent2)');
+  html += makeStatBox(avgCVR+'%','평균 CVR','var(--green)');
+  html += makeStatBox(totalOrders,'총 구매건수','var(--amber)');
+  html += makeStatBox(totalRevenue.toLocaleString(),'총 매출(만원)','var(--teal)');
+  html += '</div>';
+  html += makeRow('최고 CTR', '<span style="color:var(--amber)">' + topCTR + '%</span>');
+  html += makeRow('총 분석', records.length + '건');
+  html += makeRow('S/A/B등급', '<span style="color:var(--green)">' + top.length + '건 (' + Math.round(top.length/records.length*100) + '%)</span>');
+  html += '</div>';
+
+  // Grade dist card
+  html += '<div class="pattern-card"><div class="pattern-card-title">등급 분포</div>' + makeGradeBars() + '</div>';
+
+  // Grade criteria table
+  html += '<div class="pattern-card" style="grid-column:1/-1"><div class="pattern-card-title">등급 산정 기준</div>';
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr>';
+  html += '<th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">등급</th>';
+  html += '<th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">광고비</th>';
+  html += '<th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">ROAS</th>';
+  html += '<th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">CTR</th>';
+  html += '<th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">예상비율</th>';
+  html += '</tr></thead><tbody>';
+  html += makeCriteriaRow('S','grade-S','5만원 이상','230% 이상 또는 매출 3천만원↑','상위 20% (2.66%+)','~15%');
+  html += makeCriteriaRow('A','grade-A','5만원 이상','200% 이상','상위 30% (2.51%+)','~20%');
+  html += makeCriteriaRow('B','grade-B','5만원 이상','170% 이상','-','~20%');
+  html += makeCriteriaRow('C','grade-C','5만원 이상','130% 이상','-','~20%');
+  html += makeCriteriaRow('F','grade-F','5만원 이상','100% 이상','-','~15%');
+  html += makeCriteriaRow('F-','grade-F-','5만원 이상','100% 미만','-','-');
+  html += makeCriteriaRow('기준미달','grade-기준미달','5만원 미만','-','-','13%');
+  html += '</tbody></table></div>';
+  html += '<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.7">';
+  html += '* ROAS = 웹사이트 구매 전환값 ÷ 지출 금액 × 100%<br>';
+  html += '* CTR 상위 20%/30% 기준은 데이터 5건 이상 시 실시간 자동 계산<br>';
+  html += '* 기준: 102개 인플루언서+제품 조합, CTR 중앙값 2.13%, ROAS 중앙값 180%';
+  html += '</div></div>';
+
+  // Summary
+  html += '<div class="pattern-summary"><div class="summary-title">현재까지의 패턴 요약</div>';
+  html += '<div class="summary-text">' + summaryMsg + '</div></div>';
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+updateCount();
+updateBadges();
+</script>
+</body>
+</html>
